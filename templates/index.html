@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Captioning</title>
+    <style>
+        /* Basic styling for the form and results */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        input[type="text"], input[type="file"], button {
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        #captions, #modify-caption {
+            margin-top: 20px;
+        }
+
+        #captions p, #modify-caption select, #modify-caption input {
+            margin: 5px 0;
+        }
+
+        .remove-btn {
+            margin-left: 10px;
+            color: red;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI-Powered Image Captioning</h1>
+
+    <!-- Image upload form and prompt input -->
+    <form id="upload-form" enctype="multipart/form-data">
+        <label for="file">Upload Image:</label>
+        <input type="file" name="file" required><br>
+
+        <label for="user_prompt">Describe the kind of caption you want:</label>
+        <input type="text" name="user_prompt" id="user_prompt" placeholder="E.g., 'Make it poetic'" required><br>
+
+        <button type="submit">Upload</button>
+    </form>
+
+    <!-- Input for adding custom captions -->
+    <div>
+        <label for="user-custom-caption">Add Your Own Caption:</label>
+        <input type="text" id="user-custom-caption" placeholder="Write your caption here">
+        <button onclick="addCustomCaption()">Add Caption</button>
+    </div>
+
+    <div id="captions"></div>
+
+    <div id="modify-caption">
+        <h3>Modify Caption</h3>
+        <label for="caption-select">Select Caption to Modify:</label>
+        <select id="caption-select"></select><br>
+
+        <label for="modification-text">How would you like to modify the caption?</label>
+        <input type="text" id="modification-text" placeholder="E.g., 'Make it funnier'"><br>
+
+        <button onclick="modifyCaption()">Modify</button>
+    </div>
+
+    <script>
+        // Handle image upload and prompt submission
+        document.getElementById("upload-form").onsubmit = async function (event) {
+            event.preventDefault();
+            let formData = new FormData(event.target);
+
+            let response = await fetch("/", {
+                method: "POST",
+                body: formData
+            });
+
+            let data = await response.json();
+            let captionsDiv = document.getElementById("captions");
+            captionsDiv.innerHTML = "<h3>Generated Captions:</h3>";
+
+            // Clear existing captions in the select dropdown
+            let select = document.getElementById("caption-select");
+            select.innerHTML = "";
+
+            // Display captions and populate the select dropdown
+            data.captions.forEach((caption, index) => {
+                let captionParagraph = document.createElement("p");
+                captionParagraph.textContent = caption;
+
+                // Create remove button for each caption
+                let removeButton = document.createElement("span");
+                removeButton.textContent = "Remove";
+                removeButton.className = "remove-btn";
+                removeButton.onclick = function () {
+                    removeCaption(index);
+                };
+
+                // Append the remove button next to the caption
+                captionParagraph.appendChild(removeButton);
+                captionsDiv.appendChild(captionParagraph);
+
+                // Add the caption to the dropdown list for modification
+                let option = document.createElement("option");
+                option.value = caption;
+                option.textContent = caption;
+                select.appendChild(option);
+            });
+        };
+
+        // Handle caption removal
+        function removeCaption(index) {
+            // Remove caption from the list
+            let captionsDiv = document.getElementById("captions");
+            let allCaptions = captionsDiv.querySelectorAll("p");
+
+            if (allCaptions.length > index) {
+                allCaptions[index].remove();
+            }
+
+            // Also remove the caption from the dropdown list
+            let select = document.getElementById("caption-select");
+            select.remove(index);
+        }
+
+        // Add custom user caption
+        function addCustomCaption() {
+            let userCaption = document.getElementById("user-custom-caption").value;
+
+            if (!userCaption) {
+                alert("Please enter a caption.");
+                return;
+            }
+
+            // Add custom caption to the captions list
+            let captionsDiv = document.getElementById("captions");
+            let captionParagraph = document.createElement("p");
+            captionParagraph.textContent = userCaption;
+
+            // Create remove button for the custom caption
+            let removeButton = document.createElement("span");
+            removeButton.textContent = "Remove";
+            removeButton.className = "remove-btn";
+            removeButton.onclick = function () {
+                removeCaptionFromCustom(userCaption);
+            };
+
+            // Append the remove button next to the caption
+            captionParagraph.appendChild(removeButton);
+            captionsDiv.appendChild(captionParagraph);
+
+            // Add the custom caption to the dropdown list for modification
+            let select = document.getElementById("caption-select");
+            let option = document.createElement("option");
+            option.value = userCaption;
+            option.textContent = userCaption;
+            select.appendChild(option);
+
+            // Clear the input field after adding the caption
+            document.getElementById("user-custom-caption").value = "";
+        }
+
+        // Handle custom caption removal
+        function removeCaptionFromCustom(caption) {
+            let captionsDiv = document.getElementById("captions");
+            let allCaptions = captionsDiv.querySelectorAll("p");
+
+            allCaptions.forEach(function (captionParagraph) {
+                if (captionParagraph.textContent.includes(caption)) {
+                    captionParagraph.remove();
+                }
+            });
+
+            // Also remove the caption from the dropdown list
+            let select = document.getElementById("caption-select");
+            let options = select.querySelectorAll("option");
+
+            options.forEach(function (option) {
+                if (option.value === caption) {
+                    option.remove();
+                }
+            });
+        }
+
+        // Handle caption modification
+        async function modifyCaption() {
+            let selectedCaption = document.getElementById("caption-select").value;
+            let modificationText = document.getElementById("modification-text").value;
+
+            // Make sure both inputs are filled
+            if (!selectedCaption || !modificationText) {
+                alert("Please select a caption and provide modification instructions.");
+                return;
+            }
+
+            let response = await fetch("/modify_caption", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ selected_caption: selectedCaption, user_instruction: modificationText })
+            });
+
+            let data = await response.json();
+            alert("Modified Caption: " + data.modified_caption);
+        }
+    </script>
+</body>
+</html>

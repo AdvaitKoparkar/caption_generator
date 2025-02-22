@@ -1,0 +1,25 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin-top: 50px;
+}
+
+h2 {
+    color: #333;
+}
+
+form {
+    margin-bottom: 20px;
+}
+
+#output {
+    margin-top: 20px;
+}
+
+.remove-btn {
+    margin-left: 10px;
+    color: red;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: underline;
+}
