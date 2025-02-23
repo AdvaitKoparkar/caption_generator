@@ -19,8 +19,9 @@ caption_modifier_tokenizer = T5Tokenizer.from_pretrained("google/flan-t5-base", 
 caption_modifier_model = T5ForConditionalGeneration.from_pretrained("google/flan-t5-base").to(device)
 
 # Function to generate captions
-def generate_captions(image, promp=""):
-    inputs = blip_processor(images=image, test=promp, return_tensors="pt").to(device)
+def generate_captions(image, prompt=""):
+    prompt = f"{prompt}. Do not include any proper nouns other than the ones explicitly included in the give caption."
+    inputs = blip_processor(images=image, test=prompt, return_tensors="pt").to(device)
     output = blip_model.generate(**inputs, max_length=30, num_return_sequences=5, do_sample=True)
     return [blip_processor.decode(caption, skip_special_tokens=True) for caption in output]
 
@@ -39,7 +40,7 @@ def rank_captions(image, captions):
     return ranked_captions[:5]  # Return top 5 captions
 
 def modify_caption(selected_caption, user_instruction):
-    prompt = f"Rewrite this caption: '{selected_caption}' based on user instruction: {user_instruction}"
+    prompt = f"Rewrite this caption: '{selected_caption}' based on user instruction: {user_instruction}. Do not include any names other than the ones already in the selected caption."
     print(prompt)
     input_ids = caption_modifier_tokenizer(prompt, return_tensors="pt")
     outputs = caption_modifier_model.generate(max_new_tokens=input_ids['input_ids'].shape[-1], **input_ids)

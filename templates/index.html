@@ -196,6 +196,7 @@
                 return;
             }
 
+            // Send request to modify caption (this could be used for logging or server-side changes)
             let response = await fetch("/modify_caption", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -203,7 +204,52 @@
             });
 
             let data = await response.json();
-            alert("Modified Caption: " + data.modified_caption);
+
+            // Use the existing code to trigger the caption generation API again to fetch new captions
+            // Reusing the existing logic for caption generation
+            let formData = new FormData(document.getElementById("upload-form"));
+            let generateResponse = await fetch("/", {
+                method: "POST",
+                body: formData
+            });
+
+            let generateData = await generateResponse.json();
+            let captionsDiv = document.getElementById("captions");
+            captionsDiv.innerHTML = "<h3>Generated Captions:</h3>";
+
+            // Clear existing captions in the select dropdown
+            let select = document.getElementById("caption-select");
+            select.innerHTML = "";
+
+            // Display the newly generated captions and populate the select dropdown
+            generateData.captions.forEach((caption, index) => {
+                let captionParagraph = document.createElement("p");
+                captionParagraph.textContent = caption;
+
+                // Create remove button for each caption
+                let removeButton = document.createElement("span");
+                removeButton.textContent = "Remove";
+                removeButton.className = "remove-btn";
+                removeButton.onclick = function () {
+                    removeCaption(index);
+                };
+
+                // Append the remove button next to the caption
+                captionParagraph.appendChild(removeButton);
+                captionsDiv.appendChild(captionParagraph);
+
+                // Add the caption to the dropdown list for modification
+                let option = document.createElement("option");
+                option.value = caption;
+                option.textContent = caption;
+                select.appendChild(option);
+            });
+
+            // Clear the modification input fields
+            document.getElementById("modification-text").value = "";
+            document.getElementById("caption-select").selectedIndex = -1;
+
+            alert("Captions successfully regenerated!");
         }
     </script>
 </body>
