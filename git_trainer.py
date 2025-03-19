@@ -1,5 +1,6 @@
 import os
 import torch
+# import wandb
 from tqdm import tqdm
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -18,7 +19,18 @@ class GiTFineTuningConfig:
     optimizer_config = {
         'lr': 1e-5,
     }
-    save_path = ''
+    
+    def get_dict(self, ):
+        config = {
+            'model_name': self.model_name,
+            'seed': self.seed,
+            'num_samples': self.num_samples,
+            'train_split': self.train_split,
+            'validate_very': self.validate_every,
+            'batch_size': self.batch_size,
+            'optimizer_config': self.optimizer_config,
+        }
+        return config
 
 class ImageCaptioningDataset(torch.utils.data.Dataset):
     def __init__(self, data : torch.utils.data.Dataset, processor : AutoProcessor ):
@@ -39,7 +51,8 @@ def ddp_setup():
     dist.init_process_group(backend="nccl")
 
 class DDPTrainer:
-    def __init__(self, model : torch.nn.Module, 
+    def __init__(self, run : str,
+                 model : torch.nn.Module, 
                  dataloader_train : torch.utils.data.DataLoader, 
                  dataloader_val : torch.utils.data.DataLoader, 
                  optimizer : torch.optim.Optimizer):
@@ -50,11 +63,13 @@ class DDPTrainer:
         self.epochs_run = 0
         self.best_val_loss = float('inf')
         self.model = DDP(model.to(self.device_id), device_ids=[self.device_id])
-        if os.path.exists(GiTFineTuningConfig.save_path):
-            print("Loading snapshot")
-            self._load_snapshot(GiTFineTuningConfig.save_path)
+        # self.logger = wandb.init(
+        #     project="caption-generator-GiT",
+        #     name=f"experiment_{run}",
+        #     config=GiTFineTuningConfig.get_config()
+        # )
 
-    def _step(self, source : dict , targets: torch.Tensor ):
+    def _step(self, source : dict , targets: torch.Tensor ) -> float :
         self.optimizer.zero_grad()
         outputs = self.model(input_ids=source['input_ids'], pixel_values=source['pixel_values'], labels=targets)
         loss = outputs.loss
@@ -67,52 +82,21 @@ class DDPTrainer:
         pbar = tqdm(self.dataloader_train)
         pbar.set_description(f"[GPU{self.device_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.dataloader_train)}")
         self.model.train()
+        epoch_loss = 0.0
         for source, targets in pbar:
             source = source.to(self.device_id)
             targets = targets.to(self.device_id)
-            self._step(source, targets)
-
-    def _save_snapshot(self, epoch):
-        val_loss = 0.0
-        print('Running val')
-        self.model.eval()
-        with torch.no_grad():
-            pbar = tqdm(self.dataloader_val)
-            for source, targets in pbar:
-                source = source.to(self.device_id)
-                targets = targets.to(self.device_id)
-                output = self.model(source)
-                l = self.loss(output, targets).item()
-                val_loss += l
-
-            val_loss /= len(self.dataloader_val)
-            print(f'Val loss: {val_loss:.04f}, Best before this: {self.best_val_loss:04f}')
-
-        if val_loss < self.best_val_loss:
-            self.best_val_loss = val_loss
-            snapshot = {
-                "MODEL_STATE": self.model.module.state_dict(),
-                "OPTIMIZER_STATE": self.optimizer.state_dict(),
-                "VAL_LOSS": self.best_val_loss,
-                "EPOCHS_RUN": epoch,
-            }
-            torch.save(snapshot, self.config['save_path'])
-            print(f"Epoch {epoch} | Training snapshot saved at {self.config['save_path']}")
-
-    def _load_snapshot(self, snapshot_path : str ):
-        loc = f"cuda:{self.gpu_id}"
-        snapshot = torch.load(snapshot_path, map_location=loc)
-        self.model.load_state_dict(snapshot["MODEL_STATE"])
-        self.epochs_run = snapshot["EPOCHS_RUN"]
-        self.optimizer.load_state_dict(snapshot["OPTIMIZER_STATE"])
-        self.best_val_loss = snapshot["BEST_VAL_LOSS"]
-        print(f"Resuming training from snapshot at Epoch {self.epochs_run}, Val loss: {self.best_val_loss:.04f}")
+            loss += self._step(source, targets)
+        
+        loss = loss / (len(self.dataloader_train) * b_sz)
 
     def train(self, ):
         for epoch in range(self.epochs_run, self.config['num_epochs']):
             self._run_epoch(epoch)
-            if self.device_id == 0 and epoch % self.config['save_every'] == 0:
-                self._save_snapshot(epoch)
+            # if self.device_id == 0 and epoch % self.config['save_every'] == 0:
+            #     self._save_snapshot(epoch)
+
+
 
 def load_training_artifact():
     data = load_dataset("mrSoul7766/instagram_post_captions", split=f'train[0:{GiTFineTuningConfig.num_samples}]')
@@ -134,15 +118,13 @@ def get_dataloader(dataset : torch.utils.data.Dataset ) :
     return dl
 
 def train():
-    model, data_train, data_val, opt = load_training_artifact()
     ddp_setup()
-    model, data_train, data_val, opt, loss = load_training_artifact()
+    model, data_train, data_val, opt = load_training_artifact()
     dataloader_train = get_dataloader(data_train)
     dataloader_val = get_dataloader(data_val)
     opt = torch.optim.AdamW(model.parameters(), **GiTFineTuningConfig.optimizer_config)
-    trainer = DDPTrainer(model, dataloader_train, dataloader_val, opt)
+    trainer = DDPTrainer('test', model, dataloader_train, dataloader_val, opt)
     trainer.train()
 
 if __name__ == '__main__':
-    
-    import pdb; pdb.set_trace()
+    train()
