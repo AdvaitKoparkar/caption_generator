@@ -75,7 +75,8 @@ class ImageCaptioningDataset(torch.utils.data.Dataset):
             images=item["image"], 
             text=item["caption"], 
             padding="max_length", 
-            return_tensors="pt"
+            return_tensors="pt",
+            return_attention_mask=True  # Explicitly request attention mask
         )
         encoding = {k: v.squeeze() for k, v in encoding.items()}
         return encoding
@@ -206,7 +207,14 @@ class Trainer:
         self.optimizer.zero_grad()
         input_ids = batch.pop("input_ids").to(self.device)
         pixel_values = batch.pop("pixel_values").to(self.device)
-        outputs = self.model(input_ids=input_ids, pixel_values=pixel_values, labels=input_ids)
+        attention_mask = batch.pop("attention_mask").to(self.device)
+        
+        outputs = self.model(
+            input_ids=input_ids,
+            pixel_values=pixel_values,
+            attention_mask=attention_mask,
+            labels=input_ids
+        )
         loss = outputs.loss
         loss.backward()
         self.optimizer.step()
@@ -215,7 +223,8 @@ class Trainer:
         self.logger.log({
             "batch_loss": loss.item(),
             "learning_rate": self.optimizer.param_groups[0]['lr'],
-            "batch_size": input_ids.size(0)
+            "batch_size": input_ids.size(0),
+            "avg_attention_mask": attention_mask.float().mean().item()  # Log average mask value
         })
         return loss.item()
 
@@ -298,7 +307,14 @@ class Trainer:
             for batch in tqdm(self.dataloader_val, desc="Validating"):
                 input_ids = batch.pop("input_ids").to(self.device)
                 pixel_values = batch.pop("pixel_values").to(self.device)
-                outputs = self.model(input_ids=input_ids, pixel_values=pixel_values, labels=input_ids)
+                attention_mask = batch.pop("attention_mask").to(self.device)
+                
+                outputs = self.model(
+                    input_ids=input_ids,
+                    pixel_values=pixel_values,
+                    attention_mask=attention_mask,
+                    labels=input_ids
+                )
                 loss = outputs.loss.item()
                 total_val_loss += loss
                 num_batches += 1
@@ -308,6 +324,7 @@ class Trainer:
                     # Generate captions for a sample
                     generated_ids = self.model.generate(
                         pixel_values=pixel_values[:1],  # Take first image in batch
+                        attention_mask=attention_mask[:1],  # Use attention mask for generation
                         max_length=50,
                         num_beams=5,
                         early_stopping=True
