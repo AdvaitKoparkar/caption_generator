@@ -521,7 +521,6 @@ class Trainer:
                     captions.append(f"True: {true_caption}\nGenerated: {generated_caption}")
             
             # Create and log a single grid of images for the epoch
-            import pdb; pdb.set_trace()
             if images:
                 self.logger.log({
                     "validation_images": wandb.Image(
