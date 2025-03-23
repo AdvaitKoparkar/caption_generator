@@ -1,0 +1,18 @@
+{
+    "model_name": "microsoft/git-base",
+    "seed": 2025,
+    "num_samples": 128,
+    "train_split": 0.8,
+    "validate_every": 1,
+    "batch_size": 32,
+    "num_epochs": 5,
+    "optimizer_config": {
+        "lr": 1e-5
+    },
+    "checkpoint_dir": "checkpoints",
+    "generation_config": {
+        "max_length": 50,
+        "num_beams": 5,
+        "early_stopping": true
+    }
+} 
