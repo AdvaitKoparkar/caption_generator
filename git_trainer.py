@@ -11,6 +11,7 @@ from tqdm import tqdm
 from typing import Dict, Any, Tuple, Optional
 import datetime
 import json
+import numpy as np
 
 from transformers import AutoProcessor
 from transformers import AutoModelForCausalLM
@@ -508,7 +509,7 @@ class Trainer:
                 # Log sample predictions based on config
                 if num_batches % self.config.validation_config["visualize_every_n_batches"] == 0:
                     # Generate captions for a sample
-                    idx = torch.randint(0, (pixel_values.size(0),))
+                    idx = 0
                     generated_ids = self.model.generate(
                         pixel_values=pixel_values[idx:idx+1], 
                         **self.config.generation_config
@@ -524,9 +525,8 @@ class Trainer:
             if images:
                 self.logger.log({
                     "validation_images": wandb.Image(
-                        images,
+                        np.concatenate(images, axis=0),
                         caption=captions,
-                        key=f"validation_grid_epoch{self.epochs_run}"
                     )
                 })
         
