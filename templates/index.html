@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Image Description</title>
+    <title>Cap'n Caption</title>
     <style>
         :root {
             --primary-color: #4a90e2;
@@ -30,7 +30,7 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1000px;
             margin: 0 auto;
             background: white;
             padding: 2rem;
@@ -61,13 +61,37 @@
             font-weight: 500;
         }
 
-        input[type="file"] {
+        input[type="file"],
+        input[type="text"],
+        textarea {
             width: 100%;
             padding: 0.8rem;
             border: 2px solid #e1e1e1;
             border-radius: var(--border-radius);
             font-size: 1rem;
             transition: border-color 0.3s ease;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+            line-height: 1.5;
+            padding: 1rem;
+        }
+
+        input[type="file"]:hover,
+        input[type="text"]:hover,
+        textarea:hover {
+            border-color: var(--primary-color);
+        }
+
+        input[type="file"]:focus,
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
         }
 
         button {
@@ -79,6 +103,7 @@
             cursor: pointer;
             font-size: 1rem;
             transition: background-color 0.3s ease, transform 0.2s ease;
+            width: 100%;
         }
 
         button:hover {
@@ -99,6 +124,18 @@
             margin: 1rem 0;
             border-radius: var(--border-radius);
             box-shadow: var(--box-shadow);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .description-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .description-card.selected {
+            border: 2px solid var(--primary-color);
+            background-color: #f8f9fa;
         }
 
         .description-card p {
@@ -129,6 +166,21 @@
             animation: spin 1s linear infinite;
         }
 
+        .suggestion-hint {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
+        .selection-hint {
+            text-align: center;
+            color: var(--primary-color);
+            margin-top: 1rem;
+            font-weight: 500;
+            display: none;
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg);
@@ -138,7 +190,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>AI-Powered Image Description</h1>
+        <h1>Caption Generator</h1>
 
         <!-- Image upload form -->
         <form id="upload-form" enctype="multipart/form-data">
@@ -147,14 +199,29 @@
                 <input type="file" name="file" required>
             </div>
 
+            <div class="form-group">
+                <label for="suggestion">Style Suggestion (Optional):</label>
+                <textarea 
+                    name="suggestion" 
+                    id="suggestion" 
+                    placeholder="E.g., 'Make it more poetic' or 'Focus on the emotional aspects' or 'Describe it in a technical way'"
+                ></textarea>
+                <div class="suggestion-hint">
+                    Provide a suggestion to influence how the description is generated. Leave empty for default style.
+                </div>
+            </div>
+
             <button type="submit">Generate Descriptions</button>
         </form>
 
         <div class="loading" id="loading"></div>
         <div id="descriptions"></div>
+        <div class="selection-hint" id="selection-hint">Click on a description to select it</div>
     </div>
 
     <script>
+        let currentCaptions = [];
+
         document.getElementById("upload-form").onsubmit = async function (event) {
             event.preventDefault();
             let formData = new FormData(event.target);
@@ -162,6 +229,7 @@
             // Show loading indicator
             document.getElementById("loading").style.display = "block";
             document.getElementById("descriptions").innerHTML = "";
+            document.getElementById("selection-hint").style.display = "none";
 
             try {
                 let response = await fetch("/", {
@@ -175,15 +243,17 @@
                 if (data.error) {
                     descriptionsDiv.innerHTML = `<p style="color: var(--accent-color)">Error: ${data.error}</p>`;
                 } else {
+                    currentCaptions = data.descriptions;
                     descriptionsDiv.innerHTML = `<h3>Generated Descriptions:</h3>`;
-                    data.descriptions.forEach((description, index) => {
+                    data.descriptions.forEach((caption, index) => {
                         descriptionsDiv.innerHTML += `
-                            <div class="description-card">
+                            <div class="description-card" data-caption-id="${caption.id}">
                                 <div class="description-number">Description ${index + 1}</div>
-                                <p>${description}</p>
+                                <p>${caption.text}</p>
                             </div>
                         `;
                     });
+                    document.getElementById("selection-hint").style.display = "block";
                 }
             } catch (error) {
                 document.getElementById("descriptions").innerHTML = 
@@ -193,6 +263,37 @@
                 document.getElementById("loading").style.display = "none";
             }
         };
+
+        // Handle caption selection
+        document.getElementById("descriptions").addEventListener("click", async function(event) {
+            const card = event.target.closest(".description-card");
+            if (!card) return;
+
+            const captionId = card.dataset.captionId;
+            if (!captionId) return;
+
+            try {
+                const response = await fetch("/select-caption", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ caption_id: captionId })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // Update UI to show selection
+                    document.querySelectorAll(".description-card").forEach(c => {
+                        c.classList.remove("selected");
+                    });
+                    card.classList.add("selected");
+                    document.getElementById("selection-hint").innerHTML = "Description selected!";
+                }
+            } catch (error) {
+                console.error("Error selecting caption:", error);
+            }
+        });
     </script>
 </body>
 </html>
