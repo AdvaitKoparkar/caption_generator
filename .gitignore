@@ -1,5 +1,5 @@
 __pycache__/*
-static/*
+static/uploads/*
 wandb/*
 GenerativeImage2Text/__pycache__/*
 GenerativeImage2Text/checkpoints/*

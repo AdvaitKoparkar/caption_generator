@@ -15,6 +15,7 @@ from .config import GiTFineTuningConfig
 class GiT:
     """
     Wrapper class for the GIT model that provides a simple API for loading and using fine-tuned models.
+    Falls back to the base model if no checkpoints are available.
     
     Args:
         checkpoint_dir: Directory containing model checkpoints
@@ -28,10 +29,21 @@ class GiT:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.checkpoint_dir = checkpoint_dir
         self.run_name = run_name
+        self.is_fine_tuned = False
         
+        try:
+            # Try to load fine-tuned model
+            self._load_fine_tuned_model()
+            self.is_fine_tuned = True
+        except (FileNotFoundError, Exception) as e:
+            print("No checkpoints found, using base Git model")
+            self._load_base_model()
+    
+    def _load_fine_tuned_model(self):
+        """Load the fine-tuned model from checkpoints."""
         # Load configuration
         self.config = GiTFineTuningConfig()
-        self.config_path = os.path.join(checkpoint_dir, run_name, "config.json")
+        self.config_path = os.path.join(self.checkpoint_dir, self.run_name, "config.json")
         if os.path.exists(self.config_path):
             self.config.load_from_json(self.config_path)
         
@@ -44,6 +56,12 @@ class GiT:
         
         # Move model to device
         self.model = self.model.to(self.device)
+        self.model.eval()
+    
+    def _load_base_model(self):
+        """Load the base Git model."""
+        self.processor = AutoProcessor.from_pretrained("microsoft/git-base-coco")
+        self.model = AutoModelForCausalLM.from_pretrained("microsoft/git-base-coco").to(self.device)
         self.model.eval()
     
     def _find_best_checkpoint(self) -> Optional[str]:
@@ -91,12 +109,12 @@ class GiT:
         print(f"Validation loss: {checkpoint['val_loss']:.4f}")
         print(f"Epoch: {checkpoint['epoch']}")
     
-    def generate_caption(self, 
-                        image: Union[Image.Image, np.ndarray],
-                        max_length: Optional[int] = None,
-                        num_beams: Optional[int] = None,
-                        temperature: float = 1.0,
-                        top_p: float = 0.9) -> str:
+    def describe_image(self, 
+                      image: Union[Image.Image, np.ndarray],
+                      max_length: Optional[int] = None,
+                      num_beams: Optional[int] = None,
+                      temperature: float = 1.0,
+                      top_p: float = 0.9) -> str:
         """
         Generates a caption for the given image.
         
@@ -122,8 +140,8 @@ class GiT:
         pixel_values = inputs["pixel_values"].to(self.device)
         
         # Get generation parameters
-        max_length = max_length or self.config.generation_config["max_length"]
-        num_beams = num_beams or self.config.generation_config["num_beams"]
+        max_length = max_length or (self.config.generation_config["max_length"] if self.is_fine_tuned else 30)
+        num_beams = num_beams or (self.config.generation_config["num_beams"] if self.is_fine_tuned else 5)
         
         # Generate caption
         with torch.no_grad():
@@ -133,42 +151,51 @@ class GiT:
                 num_beams=num_beams,
                 temperature=temperature,
                 top_p=top_p,
-                early_stopping=self.config.generation_config["early_stopping"]
+                early_stopping=self.config.generation_config["early_stopping"] if self.is_fine_tuned else True
             )
         
         # Decode and return caption
         caption = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
         return caption
     
-    def generate_captions(self, 
-                         images: List[Union[Image.Image, np.ndarray]],
-                         max_length: Optional[int] = None,
-                         num_beams: Optional[int] = None,
-                         temperature: float = 1.0,
-                         top_p: float = 0.9) -> List[str]:
+    def describe_images(self, 
+                       image: Union[Image.Image, np.ndarray],
+                       num_captions: int = 3) -> List[str]:
         """
-        Generates captions for multiple images.
+        Generates multiple captions for an image with different parameters.
         
         Args:
-            images: List of PIL Images or numpy arrays
-            max_length: Maximum length of the generated captions
-            num_beams: Number of beams for beam search
-            temperature: Temperature for sampling
-            top_p: Top-p sampling parameter
+            image: PIL Image or numpy array
+            num_captions: Number of captions to generate
             
         Returns:
             List of generated captions
         """
-        return [
-            self.generate_caption(
-                image,
-                max_length=max_length,
-                num_beams=num_beams,
-                temperature=temperature,
-                top_p=top_p
+        if self.is_fine_tuned:
+            # Use different temperatures for variety with fine-tuned model
+            temperatures = [0.7, 0.9, 1.0]
+            return [
+                self.describe_image(
+                    image,
+                    temperature=temp
+                )
+                for temp in temperatures[:num_captions]
+            ]
+        else:
+            # Use base model with multiple sequences
+            inputs = self.processor(
+                images=image,
+                return_tensors="pt",
+                padding=True,
+                truncation=True
             )
-            for image in images
-        ]
+            outputs = self.model.generate(
+                **inputs,
+                max_length=30,
+                num_return_sequences=num_captions,
+                do_sample=True
+            )
+            return self.processor.batch_decode(outputs, skip_special_tokens=True)
     
     def __call__(self, 
                  image: Union[Image.Image, np.ndarray, List[Union[Image.Image, np.ndarray]]],
@@ -184,6 +211,6 @@ class GiT:
             Generated caption(s)
         """
         if isinstance(image, list):
-            return self.generate_captions(image, **kwargs)
+            return [self.describe_images(img, **kwargs) for img in image]
         else:
-            return self.generate_caption(image, **kwargs) 
+            return self.describe_images(image, **kwargs) 
