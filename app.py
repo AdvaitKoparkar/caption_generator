@@ -8,7 +8,7 @@ import hashlib
 import torch
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = './static/uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///captions.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False

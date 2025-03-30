@@ -1,3 +1,78 @@
+let currentCaptions = [];
+
+document.getElementById("upload-form").onsubmit = async function (event) {
+    event.preventDefault();
+    let formData = new FormData(event.target);
+
+    // Show loading indicator
+    document.getElementById("loading").style.display = "block";
+    document.getElementById("descriptions").innerHTML = "";
+    document.getElementById("selection-hint").style.display = "none";
+
+    try {
+        let response = await fetch("/", {
+            method: "POST",
+            body: formData
+        });
+
+        let data = await response.json();
+        let descriptionsDiv = document.getElementById("descriptions");
+        
+        if (data.error) {
+            descriptionsDiv.innerHTML = `<p style="color: var(--accent-color)">Error: ${data.error}</p>`;
+        } else {
+            currentCaptions = data.descriptions;
+            descriptionsDiv.innerHTML = `<h3>Generated Descriptions:</h3>`;
+            data.descriptions.forEach((caption, index) => {
+                descriptionsDiv.innerHTML += `
+                    <div class="description-card" data-caption-id="${caption.id}">
+                        <div class="description-number">Description ${index + 1}</div>
+                        <p>${caption.text}</p>
+                    </div>
+                `;
+            });
+            document.getElementById("selection-hint").style.display = "block";
+        }
+    } catch (error) {
+        document.getElementById("descriptions").innerHTML = 
+            `<p style="color: var(--accent-color)">Error: ${error.message}</p>`;
+    } finally {
+        // Hide loading indicator
+        document.getElementById("loading").style.display = "none";
+    }
+};
+
+// Handle caption selection
+document.getElementById("descriptions").addEventListener("click", async function(event) {
+    const card = event.target.closest(".description-card");
+    if (!card) return;
+
+    const captionId = card.dataset.captionId;
+    if (!captionId) return;
+
+    try {
+        const response = await fetch("/select-caption", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ caption_id: captionId })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            // Update UI to show selection
+            document.querySelectorAll(".description-card").forEach(c => {
+                c.classList.remove("selected");
+            });
+            card.classList.add("selected");
+            document.getElementById("selection-hint").innerHTML = "Description selected!";
+        }
+    } catch (error) {
+        console.error("Error selecting caption:", error);
+    }
+});
+
 // Handle image upload and prompt submission
 document.getElementById("upload-form").onsubmit = async function (event) {
     event.preventDefault();
