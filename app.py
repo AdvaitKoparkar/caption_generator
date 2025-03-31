@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
-from models import enhance_description, save_caption_generation, update_caption_selection, db
+from caption_models import enhance_description, save_caption_generation, update_caption_selection, db
 from functools import lru_cache
 import hashlib
 import torch
