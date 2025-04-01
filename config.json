@@ -1,4 +1,5 @@
 {
+    "algorithm": "2025.03.31",
     "services": {
         "main_app": {
             "host": "0.0.0.0",

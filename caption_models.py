@@ -13,39 +13,30 @@ db = SQLAlchemy()
 class CaptionGeneration(db.Model):
     """Model for storing caption generations."""
     id = db.Column(db.Integer, primary_key=True)
-    image_hash = db.Column(db.String(32), nullable=False)
-    user_suggestion = db.Column(db.Text)
-    model_metadata = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
-    captions = db.relationship('Caption', backref='generation', lazy=True)
-    comparisons = db.relationship('CaptionComparison', backref='generation', lazy=True)
+    algorithm = db.Column(db.String(255), nullable=False)
 
     def to_dict(self):
         return {
             'id': self.id,
-            'image_hash': self.image_hash,
-            'user_suggestion': self.user_suggestion,
-            'model_metadata': json.loads(self.model_metadata),
-            'created_at': self.created_at.isoformat(),
-            'captions': [caption.to_dict() for caption in self.captions]
+            'algorithm': self.algorithm,
         }
 
 class Caption(db.Model):
     """Model for storing individual captions."""
     id = db.Column(db.Integer, primary_key=True)
-    text = db.Column(db.Text, nullable=False)
-    is_selected = db.Column(db.Boolean, default=False)
-    selected_at = db.Column(db.DateTime)
     generation_id = db.Column(db.Integer, db.ForeignKey('caption_generation.id'), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    image_hash = db.Column(db.String(32), nullable=False)
+    user_suggestion = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
     def to_dict(self):
         return {
             'id': self.id,
-            'text': self.text,
-            'is_selected': self.is_selected,
-            'selected_at': self.selected_at.isoformat() if self.selected_at else None,
             'generation_id': self.generation_id,
+            'text': self.text,
+            'image_hash': self.image_hash,
+            'user_suggestion': self.user_suggestion,
             'created_at': self.created_at.isoformat()
         }
 
@@ -69,34 +60,6 @@ class CaptionComparison(db.Model):
             'negative_caption': self.negative_caption.to_dict(),
             'created_at': self.created_at.isoformat()
         }
-
-def save_caption_generation(image_hash: str, user_suggestion: str, descriptions: list, model_metadata: dict) -> CaptionGeneration:
-    """
-    Save a caption generation to the database.
-    
-    Args:
-        image_hash: Hash of the image
-        user_suggestion: User's suggestion for caption generation
-        descriptions: List of generated captions
-        model_metadata: Metadata about the model used
-        
-    Returns:
-        CaptionGeneration object
-    """
-    generation = CaptionGeneration(
-        image_hash=image_hash,
-        user_suggestion=user_suggestion,
-        model_metadata=json.dumps(model_metadata)
-    )
-    db.session.add(generation)
-    db.session.flush()  # Get the generation ID
-    
-    for text in descriptions:
-        caption = Caption(text=text, generation_id=generation.id)
-        db.session.add(caption)
-    
-    db.session.commit()
-    return generation
 
 def update_caption_selection(caption_id: int) -> Caption:
     """

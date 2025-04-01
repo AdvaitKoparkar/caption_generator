@@ -33,6 +33,7 @@ class AppConfig:
     Provides methods to load, save, and update configuration.
     """
     def __init__(self, config_path: str = "config.json"):
+        self.algorithm = "2025.03.31"
         self.config_path = Path(config_path)
         self.services: Dict[str, ServiceConfig] = {}
         self.git_config: Optional[GiTConfig] = None
@@ -68,6 +69,7 @@ class AppConfig:
     def _create_default_config(self) -> None:
         """Create default configuration if none exists."""
         default_config = {
+            "algorithm": self.algorithm,
             "services": {
                 "main_app": {"host": "0.0.0.0", "port": 5000},
                 "git_api": {"host": "0.0.0.0", "port": 8000},
@@ -86,6 +88,7 @@ class AppConfig:
     def save(self) -> None:
         """Save current configuration to JSON file."""
         config_data = {
+            "algorithm": self.algorithm,
             "services": {
                 name: service.to_dict()
                 for name, service in self.services.items()

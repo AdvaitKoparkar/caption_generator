@@ -3,222 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cap'n Caption</title>
-    <style>
-        :root {
-            --primary-color: #4a90e2;
-            --secondary-color: #2c3e50;
-            --accent-color: #e74c3c;
-            --background-color: #f5f6fa;
-            --text-color: #2c3e50;
-            --border-radius: 8px;
-            --box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: var(--text-color);
-            background-color: var(--background-color);
-            padding: 2rem;
-        }
-
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            padding: 2rem;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-        }
-
-        h1 {
-            color: var(--secondary-color);
-            text-align: center;
-            margin-bottom: 2rem;
-            font-size: 2.5rem;
-        }
-
-        h3 {
-            color: var(--secondary-color);
-            margin: 1.5rem 0 1rem;
-        }
-
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--secondary-color);
-            font-weight: 500;
-        }
-
-        input[type="file"],
-        input[type="text"],
-        textarea {
-            width: 100%;
-            padding: 0.8rem;
-            border: 2px solid #e1e1e1;
-            border-radius: var(--border-radius);
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-
-        textarea {
-            min-height: 120px;
-            resize: vertical;
-            font-family: inherit;
-            line-height: 1.5;
-            padding: 1rem;
-        }
-
-        input[type="file"]:hover,
-        input[type="text"]:hover,
-        textarea:hover {
-            border-color: var(--primary-color);
-        }
-
-        input[type="file"]:focus,
-        input[type="text"]:focus,
-        textarea:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
-        }
-
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 0.8rem 1.5rem;
-            border: none;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            width: 100%;
-        }
-
-        button:hover {
-            background-color: #357abd;
-            transform: translateY(-1px);
-        }
-
-        #descriptions {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: var(--border-radius);
-        }
-
-        .description-card {
-            padding: 1rem;
-            background: white;
-            margin: 1rem 0;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .description-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .description-card.selected {
-            border: 2px solid var(--primary-color);
-            background-color: #f8f9fa;
-        }
-
-        .description-card p {
-            white-space: pre-wrap;
-            margin-bottom: 0.5rem;
-        }
-
-        .description-number {
-            color: var(--primary-color);
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 1rem 0;
-        }
-
-        .loading::after {
-            content: '';
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--primary-color);
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 1s linear infinite;
-        }
-
-        .suggestion-hint {
-            font-size: 0.9rem;
-            color: #666;
-            margin-top: 0.5rem;
-            font-style: italic;
-        }
-
-        .selection-hint {
-            text-align: center;
-            color: var(--primary-color);
-            margin-top: 1rem;
-            font-weight: 500;
-            display: none;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
+    <title>Image Caption Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container">
-        <h1>Caption Generator</h1>
-
-        <!-- Image upload form -->
-        <form id="upload-form" enctype="multipart/form-data">
-            <div class="form-group">
-                <label for="file">Upload Image:</label>
-                <input type="file" name="file" required>
+        <h1>Image Caption Generator</h1>
+        
+        <form id="uploadForm" class="upload-form">
+            <div class="file-input-container">
+                <input type="file" id="imageInput" name="file" accept="image/*" required>
+                <label for="imageInput" class="file-input-label">Choose an image</label>
             </div>
-
-            <div class="form-group">
-                <label for="suggestion">Style Suggestion (Optional):</label>
-                <textarea 
-                    name="suggestion" 
-                    id="suggestion" 
-                    placeholder="E.g., 'Make it more poetic' or 'Focus on the emotional aspects' or 'Describe it in a technical way'"
-                ></textarea>
-                <div class="suggestion-hint">
-                    Provide a suggestion to influence how the description is generated. Leave empty for default style.
-                </div>
+            
+            <div class="suggestion-container">
+                <label for="suggestionInput">Caption Style Suggestion (optional):</label>
+                <input type="text" id="suggestionInput" name="suggestion" placeholder="e.g., Make it funny, poetic, or professional">
             </div>
-
-            <button type="submit">Generate Descriptions</button>
+            
+            <button type="submit" class="submit-button">Generate Captions</button>
         </form>
 
-        <div class="loading" id="loading"></div>
-        <div id="descriptions"></div>
-        <div class="selection-hint" id="selection-hint">Click on a description to select it</div>
+        <div id="imagePreview" class="image-preview" style="display: none;">
+            <img src="" alt="Preview of uploaded image">
+        </div>
+
+        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating captions...</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div id="captionsContainer" class="captions-container"></div>
     </div>
 
-    <script src="/static/js/main.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

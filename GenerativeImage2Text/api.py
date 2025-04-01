@@ -16,6 +16,7 @@ from datetime import datetime
 import requests
 import logging
 import uvicorn
+import base64
 
 from .GiT import GiT
 from config_loader import config
@@ -66,6 +67,7 @@ class CaptionRequest(BaseModel):
 
 class CaptionResponse(BaseModel):
     captions: List[str]
+    image_data: str
 
 def enhance_with_llama(initial_description: str, user_suggestion: str = "") -> str:
     """
@@ -132,7 +134,7 @@ async def generate_caption(
         suggestion: User's suggestion for caption style
         
     Returns:
-        List of enhanced captions
+        List of enhanced captions and the image data
     """
     global request_count
     request_count += 1
@@ -147,6 +149,11 @@ async def generate_caption(
         logger.info(f"Read {len(contents)} bytes from file")
         image = Image.open(io.BytesIO(contents))
         logger.info(f"Successfully opened image: {file.filename}")
+        
+        # Convert image to base64 for sending back
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
         
         # Generate initial captions with GiT
         logger.info("Starting GiT model caption generation...")
@@ -169,7 +176,7 @@ async def generate_caption(
         logger.info("Successfully generated all captions")
         logger.info(f"Final enhanced captions: {enhanced_captions}")
         logger.info("=== Caption generation complete ===")
-        return CaptionResponse(captions=enhanced_captions)
+        return CaptionResponse(captions=enhanced_captions, image_data=img_str)
         
     except Exception as e:
         logger.error(f"Error generating captions: {e}")

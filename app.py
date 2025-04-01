@@ -8,7 +8,7 @@ import hashlib
 import torch
 import logging
 from config_loader import config
-from caption_models import db, save_caption_generation, update_caption_selection
+from caption_models import db, update_caption_selection, CaptionGeneration, Caption
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -70,9 +70,9 @@ def process_image(file_hash, user_suggestion):
                 raise requests.exceptions.RequestException(f"GiT API returned status code {response.status_code}")
                 
             response_data = response.json()
-            logger.info(f"Received response from GiT API: {response_data}")
+            logger.info(f"Generated captions: {response_data['captions']}")
             logger.info("=== GiT API request complete ===")
-            return response_data['captions']
+            return response_data['captions'], response_data['image_data']
     except requests.exceptions.RequestException as e:
         logger.error(f"Error making request to GiT API: {e}")
         raise
@@ -81,68 +81,69 @@ def process_image(file_hash, user_suggestion):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
-        
-        if file and allowed_file(file.filename):
-            # Get user suggestion
-            user_suggestion = request.form.get('suggestion', '').strip()
-            logger.info(f"Processing file: {file.filename} with suggestion: {user_suggestion}")
-            
-            # Save file temporarily with original name
-            filename = secure_filename(file.filename)
-            temp_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(temp_file_path)
-            
-            try:
-                # Generate file hash for caching
-                file_hash = get_file_hash(temp_file_path)
-                
-                # Rename the file to use the hash
-                hashed_filename = f"{file_hash}.jpg"
-                hashed_file_path = os.path.join(app.config['UPLOAD_FOLDER'], hashed_filename)
-                os.rename(temp_file_path, hashed_file_path)
-                
-                # Process image with caching
-                descriptions = process_image(file_hash, user_suggestion)
-                logger.info(f"Received {len(descriptions)} descriptions from GiT API")
-                
-                # Save to database
-                model_metadata = {
-                    'git_model': 'latest',
-                    'llama_model': 'llama2',
-                    'device': 'cuda' if torch.cuda.is_available() else 'cpu'
-                }
-                generation = save_caption_generation(file_hash, user_suggestion, descriptions, model_metadata)
-                logger.info(f"Saved caption generation with ID: {generation.id}")
-                
-                # Prepare response with caption IDs
-                captions_with_ids = [
-                    {'id': caption.id, 'text': caption.text}
-                    for caption in generation.captions
-                ]
-                
-                return jsonify({'descriptions': captions_with_ids})
-                
-            except Exception as e:
-                logger.error(f"Error processing image: {e}")
-                # Clean up the uploaded file in case of error
-                if os.path.exists(temp_file_path):
-                    os.remove(temp_file_path)
-                if os.path.exists(hashed_file_path):
-                    os.remove(hashed_file_path)
-                return jsonify({'error': str(e)}), 500
-        
-        return jsonify({'error': 'Invalid file type'}), 400
-    
+    """Render the main page."""
     return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload and generate captions."""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    if file and allowed_file(file.filename):
+        try:
+            # Save file temporarily
+            file_hash = hashlib.md5(file.read()).hexdigest()
+            file.seek(0)  # Reset file pointer
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_hash}.jpg")
+            file.save(file_path)
+            
+            # Get user suggestion if provided
+            user_suggestion = request.form.get('suggestion', '')
+            
+            # Process image and get captions
+            captions_txt, image_data = process_image(file_hash, user_suggestion)
+            
+            # Save captions to database
+            caption_generation = CaptionGeneration(
+                algorithm=config.algorithm,
+            )
+            db.session.add(caption_generation)
+            db.session.commit()
+            
+            captions = []
+            for caption_text in captions_txt:
+                caption = Caption(
+                    text=caption_text,
+                    image_hash=file_hash,
+                    user_suggestion=user_suggestion,
+                    generation_id=caption_generation.id
+                )
+                captions.append(caption)
+                db.session.add(caption)
+
+            db.session.commit()
+            
+            return jsonify({
+                'captions': [{'id': c.id, 'text': c.text} for c in captions],
+                'image_data': image_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error processing image: {e}")
+            return jsonify({'error': str(e)}), 500
+        finally:
+            # Clean up the uploaded file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+    
+    return jsonify({'error': 'Invalid file type'}), 400
 
 @app.route('/select-caption', methods=['POST'])
 def select_caption():
