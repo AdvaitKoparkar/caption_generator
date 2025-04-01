@@ -1,8 +1,20 @@
-# Core dependencies
+# Core ML dependencies
 torch>=2.0.0
 transformers>=4.30.0
 Pillow>=10.0.0
 numpy>=1.24.0
+datasets>=2.14.0
+
+# Web Framework
+flask>=2.3.0
+flask-sqlalchemy>=3.1.0
+werkzeug>=2.3.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6  # For handling file uploads
+
+# Database
+sqlalchemy>=2.0.0
 
 # Training and logging
 wandb>=0.15.0
@@ -15,3 +27,8 @@ pytest-cov>=4.1.0
 # Optional: for better performance
 accelerate>=0.20.0  # For mixed precision training
 bitsandbytes>=0.41.0  # For 8-bit quantization
+
+# Development
+black>=23.7.0  # Code formatting
+flake8>=6.1.0  # Code linting
+mypy>=1.5.0    # Type checking

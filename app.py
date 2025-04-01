@@ -2,10 +2,17 @@ from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
-from caption_models import enhance_description, save_caption_generation, update_caption_selection, db
+import requests
 from functools import lru_cache
 import hashlib
 import torch
+import logging
+from config_loader import config
+from caption_models import db, save_caption_generation, update_caption_selection
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = './static/uploads'
@@ -42,9 +49,33 @@ def process_image(file_hash, user_suggestion):
     """
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_hash}.jpg")
     try:
-        image = Image.open(file_path)
-        descriptions = enhance_description(image, user_suggestion)
-        return descriptions
+        # Make request to FastAPI service
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            data = {'suggestion': user_suggestion} if user_suggestion else {}
+            git_api_url = config.get_git_api_url()
+            logger.info(f"=== Starting request to GiT API ===")
+            logger.info(f"API URL: {git_api_url}")
+            logger.info(f"User suggestion: {user_suggestion}")
+            
+            response = requests.post(
+                f"{git_api_url}/generate",
+                files=files,
+                data=data
+            )
+            logger.info(f"Response status code: {response.status_code}")
+            
+            if response.status_code != 200:
+                logger.error(f"Error response from GiT API: {response.text}")
+                raise requests.exceptions.RequestException(f"GiT API returned status code {response.status_code}")
+                
+            response_data = response.json()
+            logger.info(f"Received response from GiT API: {response_data}")
+            logger.info("=== GiT API request complete ===")
+            return response_data['captions']
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error making request to GiT API: {e}")
+        raise
     finally:
         # Clean up the uploaded file
         if os.path.exists(file_path):
@@ -63,6 +94,7 @@ def index():
         if file and allowed_file(file.filename):
             # Get user suggestion
             user_suggestion = request.form.get('suggestion', '').strip()
+            logger.info(f"Processing file: {file.filename} with suggestion: {user_suggestion}")
             
             # Save file temporarily with original name
             filename = secure_filename(file.filename)
@@ -80,6 +112,7 @@ def index():
                 
                 # Process image with caching
                 descriptions = process_image(file_hash, user_suggestion)
+                logger.info(f"Received {len(descriptions)} descriptions from GiT API")
                 
                 # Save to database
                 model_metadata = {
@@ -88,6 +121,7 @@ def index():
                     'device': 'cuda' if torch.cuda.is_available() else 'cpu'
                 }
                 generation = save_caption_generation(file_hash, user_suggestion, descriptions, model_metadata)
+                logger.info(f"Saved caption generation with ID: {generation.id}")
                 
                 # Prepare response with caption IDs
                 captions_with_ids = [
@@ -98,6 +132,7 @@ def index():
                 return jsonify({'descriptions': captions_with_ids})
                 
             except Exception as e:
+                logger.error(f"Error processing image: {e}")
                 # Clean up the uploaded file in case of error
                 if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
@@ -120,8 +155,10 @@ def select_caption():
     
     try:
         update_caption_selection(data['caption_id'])
+        logger.info(f"Updated caption selection for ID: {data['caption_id']}")
         return jsonify({'success': True})
     except Exception as e:
+        logger.error(f"Error updating caption selection: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.after_request

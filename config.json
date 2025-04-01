@@ -1,0 +1,22 @@
+{
+    "services": {
+        "main_app": {
+            "host": "0.0.0.0",
+            "port": 5000
+        },
+        "git_api": {
+            "host": "0.0.0.0",
+            "port": 8000
+        },
+        "ollama": {
+            "host": "localhost",
+            "port": 11434,
+            "model": "llama2"
+        }
+    },
+    "GiT_checkpoint": {
+        "checkpoint_dir": "checkpoints",
+        "run_name": "latest",
+        "device": "auto"
+    }
+} 

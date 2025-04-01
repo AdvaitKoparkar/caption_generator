@@ -73,28 +73,6 @@ document.getElementById("descriptions").addEventListener("click", async function
     }
 });
 
-// Handle image upload and prompt submission
-document.getElementById("upload-form").onsubmit = async function (event) {
-    event.preventDefault();
-    let formData = new FormData(event.target);
-
-    let response = await fetch("/", {
-        method: "POST",
-        body: formData
-    });
-
-    let data = await response.json();
-    let captionsDiv = document.getElementById("captions");
-    captionsDiv.innerHTML = "<h3>Generated Captions:</h3>";
-
-    // Display captions
-    data.captions.forEach((caption) => {
-        let captionParagraph = document.createElement("p");
-        captionParagraph.textContent = caption;
-        captionsDiv.appendChild(captionParagraph);
-    });
-};
-
 // Handle caption removal
 function removeCaption(index) {
     // Remove caption from the list
@@ -206,9 +184,9 @@ async function modifyCaption() {
     select.innerHTML = "";
 
     // Display the newly generated captions and populate the select dropdown
-    generateData.captions.forEach((caption, index) => {
+    generateData.descriptions.forEach((caption, index) => {
         let captionParagraph = document.createElement("p");
-        captionParagraph.textContent = caption;
+        captionParagraph.textContent = caption.text;
 
         // Create remove button for each caption
         let removeButton = document.createElement("span");
@@ -224,8 +202,8 @@ async function modifyCaption() {
 
         // Add the caption to the dropdown list for modification
         let option = document.createElement("option");
-        option.value = caption;
-        option.textContent = caption;
+        option.value = caption.text;
+        option.textContent = caption.text;
         select.appendChild(option);
     });
 
